@@ -91,12 +91,12 @@ void Inventory::load(Interactive&, World& w, Serialize &s) {
   }
 
 void Inventory::save(Serialize &fout) const {
-  uint32_t sz=items.size();
+  uint32_t sz=uint32_t(items.size());
   fout.write(sz);
   for(auto& i:items)
     i->save(fout);
 
-  sz=mdlSlots.size();
+  sz=uint32_t(mdlSlots.size());
   fout.write(sz);
   for(auto& i:mdlSlots){
     fout.write(i.slot,indexOf(i.item));
@@ -530,8 +530,6 @@ void Inventory::switchActiveWeapon(Npc& owner,uint8_t slot) {
     next=&range;
   if(3<=slot && slot<=10)
     next=&numslot[slot-3];
-  if(next==active)
-    active=nullptr; else
   if(next!=nullptr && *next!=nullptr)
     active=next;
 
@@ -543,7 +541,7 @@ void Inventory::switchActiveSpell(int32_t spell, Npc& owner) {
   for(uint8_t i=0;i<8;++i) {
     auto s = numslot[i];
     if(s!=nullptr && s->isSpellOrRune() && s->spellId()==spell){
-      switchActiveWeapon(owner,i+3);
+      switchActiveWeapon(owner,uint8_t(i+3));
       updateRuneView(owner);
       return;
       }
@@ -561,7 +559,7 @@ void Inventory::switchActiveSpell(int32_t spell, Npc& owner) {
 uint8_t Inventory::currentSpellSlot() const {
   for(uint8_t i=0;i<8;++i){
     if(active==&numslot[i])
-      return i+3;
+      return uint8_t(i+3);
     }
   return Item::NSLOT;
   }
@@ -943,7 +941,7 @@ uint32_t Inventory::indexOf(const Item *it) const {
     return uint32_t(-1);
   for(size_t i=0;i<items.size();++i)
     if(items[i].get()==it)
-      return i;
+      return uint32_t(i);
   return uint32_t(-1);
   }
 

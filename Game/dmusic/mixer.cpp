@@ -222,7 +222,7 @@ void Mixer::mix(int16_t *out, size_t samples) {
 
     sampleCursor += stp.samples;
     out          += stp.samples*2;
-    samplesRemain-= stp.samples;
+    samplesRemain-= size_t(stp.samples);
 
     if(sampleCursor==patEnd)
       nextPattern();
@@ -275,7 +275,7 @@ void Mixer::volFromCurve(PatternInternal &part,Instr& inst,std::vector<float> &v
       continue;
     int64_t s = toSamples(i.at)-shift;
     int64_t e = toSamples(i.at+i.duration)-shift;
-    if(s>v.size() || e<0)
+    if((s>=0 && size_t(s)>v.size()) || e<0)
       continue;
 
     const size_t begin = size_t(std::max<int64_t>(s,0));
@@ -288,7 +288,7 @@ void Mixer::volFromCurve(PatternInternal &part,Instr& inst,std::vector<float> &v
     switch(i.shape) {
       case DMUS_CURVES_LINEAR: {
         for(size_t i=begin;i<size;++i) {
-          float val = (i-s)/range;
+          float val = float(i-s)/range;
           v[i] = val*diffV+shift;
           }
         break;
@@ -301,21 +301,21 @@ void Mixer::volFromCurve(PatternInternal &part,Instr& inst,std::vector<float> &v
         }
       case DMUS_CURVES_EXP: {
         for(size_t i=begin;i<size;++i) {
-          float val = (i-s)/range;
+          float val = float(i-s)/range;
           v[i] = std::pow(val,2.f)*diffV+shift;
           }
         break;
         }
       case DMUS_CURVES_LOG: {
         for(size_t i=begin;i<size;++i) {
-          float val = (i-s)/range;
+          float val = float(i-s)/range;
           v[i] = std::sqrt(val)*diffV+shift;
           }
         break;
         }
       case DMUS_CURVES_SINE: {
         for(size_t i=begin;i<size;++i) {
-          float linear = (i-s)/range;
+          float linear = float(i-s)/range;
           float val    = std::sin(float(M_PI)*linear*0.5f);
           v[i] = val*diffV+shift;
           }

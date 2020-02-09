@@ -4,7 +4,15 @@
 
 #define TSF_IMPLEMENTATION
 // #define TSF_STATIC
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
 #include "tsf.h"
+#pragma GCC diagnostic pop
+#else
+#include "tsf.h"
+#endif
 
 using namespace Dx8;
 
@@ -171,9 +179,9 @@ uint16_t Hydra::mkGeneratorOp(uint16_t usDestination) {
     }
   }
 
-Hydra::Hydra(const DlsCollection &dls) {
+Hydra::Hydra(const DlsCollection &dls,const std::vector<Wave>& wave) {
   std::vector<tsf_hydra_shdr> samples;
-  wdata = allocSamples(dls,samples,wdataSize);
+  wdata = allocSamples(wave,samples,wdataSize);
 
   const uint16_t modIndex     = 0;
   const uint16_t instModNdx   = 0;
@@ -187,7 +195,8 @@ Hydra::Hydra(const DlsCollection &dls) {
 
     pgen.push_back(mkPgen(41,uint16_t(idInstr)));
     inst.push_back(mkInst(instr.info.inam.c_str(),instBagIndex));
-    instBagIndex+=instr.regions.size();
+
+    instBagIndex = uint16_t(instBagIndex+instr.regions.size());
 
     for(const auto& reg : instr.regions) {
       const auto& hdr        = reg.head;
@@ -294,7 +303,7 @@ tsf *Hydra::toTsf() {
   res->presets       = reinterpret_cast<tsf_preset*>(TSF_MALLOC(size_t(res->presetNum)*sizeof(tsf_preset)));
 
   res->fontSamples   = wdata.get();
-  tsf_load_presets(res, &hydra, wdataSize);
+  tsf_load_presets(res, &hydra, unsigned(wdataSize));
   return res;
   }
 
@@ -327,17 +336,17 @@ void Hydra::toTsf(tsf_hydra &out) {
   out.shdrs   = shdr.data();
   }
 
-std::unique_ptr<float[]> Hydra::allocSamples(const DlsCollection &dls,std::vector<tsf_hydra_shdr>& smp,size_t& count) {
+std::unique_ptr<float[]> Hydra::allocSamples(const std::vector<Wave>& wave,std::vector<tsf_hydra_shdr>& smp,size_t& count) {
   size_t wavStart=0;
-  for(const auto& wav : dls.wave) {
+  for(const auto& wav : wave) {
     if(wav.wfmt.wBitsPerSample!=16)
       throw std::runtime_error("Unexpected DLS sample format");
     const size_t wavSize = wav.wavedata.size()/(sizeof(int16_t));
 
     tsf_hydra_shdr sx={};
     std::strncpy(sx.sampleName,wav.info.inam.c_str(),19);
-    sx.start           = wavStart;
-    sx.end             = wavStart+wavSize;
+    sx.start           = tsf_u32(wavStart);
+    sx.end             = tsf_u32(wavStart+wavSize);
     sx.startLoop       = 0; // will be overriden, later
     sx.endLoop         = 0;
     sx.sampleRate      = wav.wfmt.dwSamplesPerSec;
@@ -355,12 +364,9 @@ std::unique_ptr<float[]> Hydra::allocSamples(const DlsCollection &dls,std::vecto
   float* wr = samples.get();
 
   // exception safe
-  for(const auto & wav : dls.wave) {
-    const int16_t* smp = reinterpret_cast<const int16_t*>(wav.wavedata.data());
-    for(size_t i=0;i<wav.wavedata.size();i+=sizeof(int16_t), ++smp) {
-      *wr = (*smp)/32767.f;
-      ++wr;
-      }
+  for(const auto& wav : wave) {
+    wav.toFloatSamples(wr);
+    wr+=wav.wavedata.size()/sizeof(int16_t);
 
     // terminator samples.
     for(size_t i=0; i<kTerminatorSampleLength; i++) {

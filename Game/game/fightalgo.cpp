@@ -92,7 +92,7 @@ void FightAlgo::fillQueue(Npc &npc, Npc &tg, GameScript& owner) {
   }
 
 bool FightAlgo::fillQueue(GameScript& owner,const Daedalus::GEngineClasses::C_FightAI &src) {
-  size_t sz=0;
+  uint32_t sz=0;
   for(size_t i=0;i<Daedalus::GEngineClasses::MAX_MOVE;++i){
     if(src.move[i]==0)
       break;
@@ -230,14 +230,14 @@ void FightAlgo::onTakeHit() {
 
 float FightAlgo::prefferedAtackDistance(const Npc &npc, const Npc &tg,  GameScript &owner) const {
   auto  gl     = tg.guild();
-  float baseTg = owner.guildVal().fight_range_base[gl];
+  float baseTg = float(owner.guildVal().fight_range_base[gl]);
 
   return baseTg+weaponRange(owner,npc);
   }
 
 float FightAlgo::prefferedGDistance(const Npc &npc, const Npc &tg, GameScript &owner) const {
   auto  gl     = tg.guild();
-  float baseTg = owner.guildVal().fight_range_base[gl];
+  float baseTg = float(owner.guildVal().fight_range_base[gl]);
 
   return baseTg+gRange(owner,npc);
   }
@@ -272,13 +272,13 @@ bool FightAlgo::isInFocusAngle(const Npc &npc, const Npc &tg) const {
 float FightAlgo::gRange(GameScript &owner, const Npc &npc) {
   auto  gl = npc.guild();
   auto& gv = owner.guildVal();
-  return gv.fight_range_g[gl]+gv.fight_range_base[gl]+weaponOnlyRange(owner,npc);
+  return float(gv.fight_range_g[gl]+gv.fight_range_base[gl])+weaponOnlyRange(owner,npc);
   }
 
 float FightAlgo::weaponRange(GameScript &owner, const Npc &npc) {
   auto  gl = npc.guild();
   auto& gv = owner.guildVal();
-  return gv.fight_range_base[gl]+weaponOnlyRange(owner,npc);
+  return float(gv.fight_range_base[gl])+weaponOnlyRange(owner,npc);
   }
 
 float FightAlgo::weaponOnlyRange(GameScript &owner,const Npc &npc) {
@@ -289,12 +289,12 @@ float FightAlgo::weaponOnlyRange(GameScript &owner,const Npc &npc) {
 
   switch(npc.weaponState()) {
     case WeaponState::W1H:
-      return gv.fight_range_1ha[gl] + add;
+      return float(gv.fight_range_1ha[gl] + add);
     case WeaponState::W2H:
-      return gv.fight_range_2ha[gl] + add;
+      return float(gv.fight_range_2ha[gl] + add);
     case WeaponState::NoWeapon:
     case WeaponState::Fist:
-      return gv.fight_range_fist[gl];
+      return float(gv.fight_range_fist[gl]);
     case WeaponState::Bow:
     case WeaponState::CBow:
     case WeaponState::Mage:

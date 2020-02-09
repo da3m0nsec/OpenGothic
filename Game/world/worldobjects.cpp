@@ -27,7 +27,7 @@ WorldObjects::~WorldObjects() {
   }
 
 void WorldObjects::load(Serialize &fin) {
-  uint32_t sz = npcArr.size();
+  uint32_t sz = uint32_t(npcArr.size());
 
   fin.read(sz);
   npcArr.clear();
@@ -52,17 +52,17 @@ void WorldObjects::load(Serialize &fin) {
   }
 
 void WorldObjects::save(Serialize &fout) {
-  uint32_t sz = npcArr.size();
+  uint32_t sz = uint32_t(npcArr.size());
   fout.write(sz);
   for(auto& i:npcArr)
     i->save(fout);
 
-  sz = itemArr.size();
+  sz = uint32_t(itemArr.size());
   fout.write(sz);
   for(auto& i:itemArr)
     i->save(fout);
 
-  sz = interactiveObj.size();
+  sz = uint32_t(interactiveObj.size());
   fout.write(sz);
   for(auto& i:interactiveObj)
     i.save(fout);
@@ -118,11 +118,12 @@ void WorldObjects::tick(uint64_t dt) {
       float l = i->qDistTo(r.x,r.y,r.z);
       if(r.item!=size_t(-1) && r.other!=nullptr)
         owner.script().setInstanceItem(*r.other,r.item);
-      if(l<i->handle()->senses_range*i->handle()->senses_range) {
+      const float range = float(i->handle()->senses_range);
+      if(l<range*range) {
         // aproximation of behavior of original G2
         if(!i->isDown() &&
            i->canSenseNpc(*r.other, true)!=SensesBit::SENSE_NONE &&
-           i->canSenseNpc(*r.victum,true,r.other->handle()->senses_range)!=SensesBit::SENSE_NONE
+           i->canSenseNpc(*r.victum,true,float(r.other->handle()->senses_range))!=SensesBit::SENSE_NONE
           ) {
           i->perceptionProcess(*r.other,r.victum,l,Npc::PercType(r.what));
           }
@@ -141,14 +142,14 @@ uint32_t WorldObjects::npcId(const Npc *ptr) const {
     return uint32_t(-1);
   for(size_t i=0;i<npcArr.size();++i)
     if(npcArr[i].get()==ptr)
-      return i;
+      return uint32_t(i);
   return uint32_t(-1);
   }
 
 uint32_t WorldObjects::itmId(const void *ptr) const {
   for(size_t i=0;i<itemArr.size();++i)
     if(itemArr[i]->handle()==ptr)
-      return i;
+      return uint32_t(i);
   return uint32_t(-1);
   }
 
@@ -332,11 +333,9 @@ void WorldObjects::triggerEvent(const TriggerEvent &e) {
   }
 
 void WorldObjects::triggerOnStart(bool wrldStartup) {
+  TriggerEvent evt(wrldStartup);
   for(auto& i:triggers)
-    if(i->vobType()==ZenLoad::zCVobData::VT_oCTriggerWorldStart) {
-      TriggerEvent evt(wrldStartup);
-      i->processEvent(evt);
-      }
+    i->processOnStart(evt);
   }
 
 void WorldObjects::enableTicks(AbstractTrigger& t) {
@@ -508,8 +507,8 @@ void WorldObjects::marchInteractives(Tempest::Painter &p,const Tempest::Matrix4x
     if(z<0.f || z>1.f)
       continue;
 
-    x = (0.5f*x+0.5f)*w;
-    y = (0.5f*y+0.5f)*h;
+    x = (0.5f*x+0.5f)*float(w);
+    y = (0.5f*y+0.5f)*float(h);
 
     p.setBrush(Tempest::Color(1,1,1,1));
     p.drawRect(int(x),int(y),1,1);

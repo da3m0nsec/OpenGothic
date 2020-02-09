@@ -1,7 +1,10 @@
 #include "dynamicworld.h"
 
-#include "world/bullet.h"
-#include "physicmeshshape.h"
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wfloat-conversion"
+#endif
 
 #include <BulletCollision/CollisionDispatch/btCollisionDispatcher.h>
 #include <BulletCollision/CollisionDispatch/btCollisionDispatcherMt.h>
@@ -18,11 +21,23 @@
 #include <BulletCollision/CollisionShapes/btTriangleMesh.h>
 #include <BulletCollision/CollisionShapes/btConeShape.h>
 #include <BulletCollision/CollisionShapes/btMultimaterialTriangleMeshShape.h>
-#include <LinearMath/btDefaultMotionState.h>
+#include <BulletCollision/CollisionDispatch/btCollisionWorld.h>
 #include <BulletCollision/NarrowPhaseCollision/btRaycastCallback.h>
+#include <LinearMath/btDefaultMotionState.h>
+#include <LinearMath/btScalar.h>
+
+#include "graphics/submesh/packedmesh.h"
+#include "physicmeshshape.h"
+#include "physicmesh.h"
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 #include <algorithm>
 #include <cmath>
+
+#include "world/bullet.h"
 
 const float DynamicWorld::ghostPadding=50-22.5f;
 const float DynamicWorld::ghostHeight =140;
@@ -284,7 +299,7 @@ struct DynamicWorld::NpcBodyList final {
       r = std::upper_bound(arr.begin(),arr.end(),n.pos[0]+dX,[](float x,const Record& b){ return x<b.x; });
       }
 
-    const int dist = std::distance(l,r); (void)dist;
+    const auto dist = std::distance(l,r);
     if(dist<=1)
       return false;
 
@@ -406,7 +421,7 @@ struct DynamicWorld::BulletsList final {
   DynamicWorld&         wrld;
   };
 
-DynamicWorld::DynamicWorld(World&,const ZenLoad::PackedMesh& pkg) {
+DynamicWorld::DynamicWorld(World&,const PackedMesh& pkg) {
   // collision configuration contains default setup for memory, collision setup
   conf.reset(new btDefaultCollisionConfiguration());
 
@@ -431,10 +446,10 @@ DynamicWorld::DynamicWorld(World&,const ZenLoad::PackedMesh& pkg) {
         landMesh ->addIndex(i.indices,i.material.matGroup);
       }
 
-  landShape.reset(new btMultimaterialTriangleMeshShape(landMesh.get(),true,true));
+  landShape.reset(new btMultimaterialTriangleMeshShape(landMesh.get(),landMesh->useQuantization(),true));
   landBody = landObj();
 
-  waterShape.reset(new btMultimaterialTriangleMeshShape(waterMesh.get(),false,true));
+  waterShape.reset(new btMultimaterialTriangleMeshShape(waterMesh.get(),waterMesh->useQuantization(),true));
   waterBody = waterObj();
 
   world->addCollisionObject(landBody.get());
@@ -707,7 +722,7 @@ DynamicWorld::BulletBody* DynamicWorld::bulletObj(BulletCallback* cb) {
   }
 
 void DynamicWorld::moveBullet(BulletBody &b, float dx, float dy, float dz, uint64_t dt) {
-  float k  = dt/1000.f;
+  float k  = float(dt)/1000.f;
   const bool isSpell = b.isSpell();
 
   auto  p  = b.pos;
@@ -886,9 +901,10 @@ bool DynamicWorld::hasCollision(const Item& it,std::array<float,3>& normal) {
   return callback.count>0;
   }
 
+template<class RayResultCallback>
 void DynamicWorld::rayTest(const btVector3 &s,
                            const btVector3 &e,
-                           btCollisionWorld::RayResultCallback &callback) const {
+                           RayResultCallback &callback) const {
   if(s==e)
     return;
 

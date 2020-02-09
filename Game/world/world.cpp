@@ -11,6 +11,7 @@
 #include "focus.h"
 #include "resources.h"
 #include "game/serialize.h"
+#include "graphics/submesh/packedmesh.h"
 #include "graphics/visualfx.h"
 #include "graphics/skeleton.h"
 
@@ -29,13 +30,15 @@ World::World(GameSession& game,const RendererStorage &storage, std::string file,
   ZenLoad::oCWorldData world;
   parser.readWorld(world,isG2==2);
 
-  ZenLoad::PackedMesh mesh;
+  // ZenLoad::PackedMesh mesh;
+  //worldMesh->packMesh(mesh, 1.f, false);
   ZenLoad::zCMesh* worldMesh = parser.getWorldMesh();
-  worldMesh->packMesh(mesh, 1.f, false);
+  PackedMesh vmesh(*worldMesh,PackedMesh::PK_Visual);
+  PackedMesh pmesh(*worldMesh,PackedMesh::PK_Physic);
 
   loadProgress(50);
-  wdynamic.reset(new DynamicWorld(*this,mesh));
-  wview.reset   (new WorldView(*this,mesh,storage));
+  wdynamic.reset(new DynamicWorld(*this,pmesh));
+  wview.reset   (new WorldView(*this,vmesh,storage));
   loadProgress(70);
 
   wmatrix.reset(new WayMatrix(*this,world.waynet));
@@ -65,13 +68,13 @@ World::World(GameSession &game, const RendererStorage &storage,
   ZenLoad::oCWorldData world;
   parser.readWorld(world,isG2==2);
 
-  ZenLoad::PackedMesh mesh;
   ZenLoad::zCMesh* worldMesh = parser.getWorldMesh();
-  worldMesh->packMesh(mesh, 1.f, false);
+  PackedMesh vmesh(*worldMesh,PackedMesh::PK_Visual);
+  PackedMesh pmesh(*worldMesh,PackedMesh::PK_Physic);
 
   loadProgress(50);
-  wdynamic.reset(new DynamicWorld(*this,mesh));
-  wview.reset   (new WorldView(*this,mesh,storage));
+  wdynamic.reset(new DynamicWorld(*this,pmesh));
+  wview.reset   (new WorldView(*this,vmesh,storage));
   loadProgress(70);
 
   wmatrix.reset(new WayMatrix(*this,world.waynet));
@@ -336,8 +339,9 @@ Focus World::validateFocus(const Focus &def) {
 
 Focus World::findFocus(const Npc &pl, const Focus& def) {
   const Daedalus::GEngineClasses::C_Focus* fptr=&game.script()->focusNorm();
-  auto opt  = WorldObjects::NoFlg;
-  auto coll = TARGET_COLLECT_FOCUS;
+  auto opt    = WorldObjects::NoFlg;
+  auto coll   = TARGET_COLLECT_FOCUS;
+  auto weapon = pl.inventory().activeWeapon();
 
   switch(pl.weaponState()) {
     case WeaponState::Fist:
@@ -353,10 +357,11 @@ Focus World::findFocus(const Npc &pl, const Focus& def) {
       break;
     case WeaponState::Mage:{
       fptr = &game.script()->focusMage();
-      int32_t id  = player()->inventory().activeWeapon()->spellId();
-      auto&   spl = script().getSpell(id);
-
-      coll = TargetCollect(spl.targetCollectAlgo);
+      if(weapon!=nullptr) {
+        int32_t id  = weapon->spellId();
+        auto&   spl = script().getSpell(id);
+        coll = TargetCollect(spl.targetCollectAlgo);
+        }
       opt  = WorldObjects::NoDeath;
       break;
       }

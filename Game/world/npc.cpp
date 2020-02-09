@@ -1024,7 +1024,7 @@ bool Npc::implLookAt(const Npc& oth, bool noAnim, uint64_t dt) {
 
 bool Npc::implLookAt(float dx, float dz, bool noAnim, uint64_t dt) {
   auto  gl   = guild();
-  float step = owner.script().guildVal().turn_speed[gl]*(dt/1000.f)*60.f/100.f;
+  float step = float(owner.script().guildVal().turn_speed[gl])*(float(dt)/1000.f)*60.f/100.f;
 
   if(dx==0.f && dz==0.f) {
     setAnimRotate(0);
@@ -1035,7 +1035,7 @@ bool Npc::implLookAt(float dx, float dz, bool noAnim, uint64_t dt) {
   float da = a-angle;
 
   if(noAnim || std::cos(double(da)*M_PI/180.0)>0) {
-    if(std::abs(int(da)%180)<=step) {
+    if(float(std::abs(int(da)%180))<=step) {
       setAnimRotate(0);
       setDirection(a);
       return false;
@@ -1711,8 +1711,8 @@ void Npc::nextAiAction(uint64_t dt) {
       }
     case AI_SetNpcsToState:{
       const int32_t r = act.i0*act.i0;
-      owner.detectNpc(position(),hnpc.senses_range,[&act,this,r](Npc& other){
-        if(&other!=this && qDistTo(other)<r)
+      owner.detectNpc(position(),float(hnpc.senses_range),[&act,this,r](Npc& other){
+        if(&other!=this && qDistTo(other)<float(r))
           other.aiStartState(uint32_t(act.func),1,other.currentOther,other.hnpc.wp.c_str());
         });
       break;
@@ -1948,7 +1948,7 @@ BodyState Npc::bodyStateMasked() const {
   return BodyState(bs & (BS_MAX | BS_FLAG_MASK));
   }
 
-void Npc::setToFightMode(const uint32_t item) {
+void Npc::setToFightMode(const size_t item) {
   if(invent.itemCount(item)==0)
     addItem(item,1);
 
@@ -1957,10 +1957,16 @@ void Npc::setToFightMode(const uint32_t item) {
   invent.equip(item,*this,true);
   invent.switchActiveWeapon(*this,1);
 
-  if(weaponSt==WeaponState::W1H || weaponSt==WeaponState::W2H)
+  auto w = invent.currentMeleWeapon();
+  if(w==nullptr || w->clsId()!=item)
     return;
 
-  weaponSt=weaponState();
+  if(w->is2H()) {
+    weaponSt = WeaponState::W2H;
+    } else {
+    weaponSt = WeaponState::W1H;
+    }
+
   if(visual.setToFightMode(weaponSt))
     updateWeaponSkeleton();
 
@@ -1979,7 +1985,7 @@ void Npc::setToFistMode() {
   hnpc.weapon  = 1;
   }
 
-Item* Npc::addItem(const uint32_t item, uint32_t count) {
+Item* Npc::addItem(const size_t item, uint32_t count) {
   return invent.addItem(item,count,owner);
   }
 
@@ -1987,19 +1993,19 @@ Item* Npc::addItem(std::unique_ptr<Item>&& i) {
   return invent.addItem(std::move(i));
   }
 
-void Npc::addItem(uint32_t id, Interactive &chest, uint32_t count) {
+void Npc::addItem(size_t id, Interactive &chest, uint32_t count) {
   Inventory::trasfer(invent,chest.inventory(),nullptr,id,count,owner);
   }
 
-void Npc::addItem(uint32_t id, Npc &from, uint32_t count) {
+void Npc::addItem(size_t id, Npc &from, uint32_t count) {
   Inventory::trasfer(invent,from.invent,&from,id,count,owner);
   }
 
-void Npc::moveItem(uint32_t id, Interactive &to, uint32_t count) {
+void Npc::moveItem(size_t id, Interactive &to, uint32_t count) {
   Inventory::trasfer(to.inventory(),invent,this,id,count,owner);
   }
 
-void Npc::sellItem(uint32_t id, Npc &to, uint32_t count) {
+void Npc::sellItem(size_t id, Npc &to, uint32_t count) {
   if(id==owner.script().goldId())
     return;
   int32_t price = invent.sellPriceOf(id);
@@ -2007,19 +2013,23 @@ void Npc::sellItem(uint32_t id, Npc &to, uint32_t count) {
   invent.addItem(owner.script().goldId(),uint32_t(price),owner);
   }
 
-void Npc::buyItem(uint32_t id, Npc &from, uint32_t count) {
+void Npc::buyItem(size_t id, Npc &from, uint32_t count) {
   if(id==owner.script().goldId())
     return;
+
   int32_t price = from.invent.priceOf(id);
-  if(price*count>int32_t(invent.goldCount())) {
+  if(price>0 && uint32_t(price)*count>invent.goldCount()) {
+    count = uint32_t(invent.goldCount())/uint32_t(price);
+    }
+  if(count==0) {
     owner.script().printCannotBuyError(*this);
-    if(int32_t(invent.goldCount())/price >= 1){
-      buyItem(id,from,int32_t(invent.goldCount())/price);
-      }
     return;
     }
+
   Inventory::trasfer(invent,from.invent,nullptr,id,count,owner);
-  invent.delItem(owner.script().goldId(),uint32_t(price)*count,*this);
+  if(price>=0)
+    invent.delItem(owner.script().goldId(),uint32_t(price)*count,*this); else
+    invent.addItem(owner.script().goldId(),uint32_t(-price)*count,owner);
   }
 
 void Npc::clearInventory() {
@@ -2039,34 +2049,34 @@ Item *Npc::currentRangeWeapon() {
   }
 
 bool Npc::lookAt(float dx, float dz, bool anim, uint64_t dt) {
-  return implLookAt(dx,dz,anim ? 0 : 180,dt);
+  return implLookAt(dx,dz,anim,dt);
   }
 
 bool Npc::checkGoToNpcdistance(const Npc &other) {
   return fghAlgo.isInAtackRange(*this,other,owner.script());
   }
 
-size_t Npc::hasItem(uint32_t id) const {
+size_t Npc::hasItem(size_t id) const {
   return invent.itemCount(id);
   }
 
-Item *Npc::getItem(uint32_t id) {
+Item *Npc::getItem(size_t id) {
   return invent.getItem(id);
   }
 
-void Npc::delItem(uint32_t item, uint32_t amount) {
+void Npc::delItem(size_t item, uint32_t amount) {
   invent.delItem(item,amount,*this);
   }
 
-void Npc::useItem(uint32_t item,bool force) {
+void Npc::useItem(size_t item,bool force) {
   invent.use(item,*this,force);
   }
 
-void Npc::setCurrentItem(uint32_t item) {
+void Npc::setCurrentItem(size_t item) {
   invent.setCurrentItem(item);
   }
 
-void Npc::unequipItem(uint32_t item) {
+void Npc::unequipItem(size_t item) {
   invent.unequip(item,*this);
   }
 
@@ -2166,7 +2176,7 @@ bool Npc::drawWeaponBow() {
 bool Npc::drawMage(uint8_t slot) {
   if(isFaling() || mvAlgo.isSwim())
     return false;
-  Item* it = invent.currentSpell(slot-3);
+  Item* it = invent.currentSpell(uint8_t(slot-3));
   if(it==nullptr) {
     closeWeapon(false);
     return true;
@@ -2343,8 +2353,8 @@ bool Npc::shootBow() {
 
   auto rgn = currentRangeWeapon();
   if(rgn!=nullptr && rgn->isCrossbow())
-    b.setHitChance(hnpc.hitChance[TALENT_CROSSBOW]/100.f); else
-    b.setHitChance(hnpc.hitChance[TALENT_BOW]/100.f);
+    b.setHitChance(float(hnpc.hitChance[TALENT_CROSSBOW])/100.f); else
+    b.setHitChance(float(hnpc.hitChance[TALENT_BOW]     )/100.f);
 
   return true;
   }
@@ -2448,7 +2458,7 @@ bool Npc::perceptionProcess(Npc &pl,float quadDist) {
   }
 
 bool Npc::perceptionProcess(Npc &pl, Npc* victum, float quadDist, Npc::PercType perc) {
-  float r = hnpc.senses_range;
+  float r = float(hnpc.senses_range);
   r = r*r;
   if(quadDist>r || isPlayer())
     return false;
@@ -2497,11 +2507,11 @@ void Npc::quitIneraction() {
   currentInteract=nullptr;
   }
 
-bool Npc::isState(uint32_t stateFn) const {
+bool Npc::isState(size_t stateFn) const {
   return aiState.funcIni==stateFn;
   }
 
-bool Npc::wasInState(uint32_t stateFn) const {
+bool Npc::wasInState(size_t stateFn) const {
   return aiPrevState==stateFn;
   }
 
@@ -2522,14 +2532,10 @@ void Npc::addRoutine(gtime s, gtime e, uint32_t callback, const WayPoint *point)
   routines.push_back(r);
   }
 
-void Npc::excRoutine(uint32_t callback) {
-  //aiState.funcEnd=0; // no cleanup
-
+void Npc::excRoutine(size_t callback) {
   routines.clear();
   owner.script().invokeState(this,currentOther,nullptr,callback);
   aiState.eTime = gtime();
-  //setInteraction(nullptr);
-  //aiContinueRoutine();
   }
 
 void Npc::multSpeed(float s) {
@@ -2565,8 +2571,8 @@ bool Npc::tryMove(const std::array<float,3> &dp) {
   float scale=speed*0.25f;
   for(int i=1;i<4+3;++i){
     std::array<float,3> p=pos;
-    p[0]+=norm[0]*scale*i;
-    p[2]+=norm[2]*scale*i;
+    p[0]+=norm[0]*scale*float(i);
+    p[2]+=norm[2]*scale*float(i);
 
     std::array<float,3> nn={};
     if(physic.tryMoveN(p,nn)) {
@@ -2607,9 +2613,9 @@ float Npc::clampHeight(Npc::Anim a) const {
 
   switch(a) {
     case AnimationSolver::JumpUpLow:
-      return g.jumplow_height[i];
+      return float(g.jumplow_height[i]);
     case AnimationSolver::JumpUpMid:
-      return g.jumpmid_height[i];
+      return float(g.jumpmid_height[i]);
     default:
       return 0;
     }
@@ -2946,7 +2952,7 @@ SensesBit Npc::canSenseNpc(float tx, float ty, float tz, bool freeLos, float ext
   DynamicWorld* w = owner.physic();
   static const double ref = std::cos(100*M_PI/180.0); // spec requires +-100 view angle range
 
-  const float range = hnpc.senses_range+extRange;
+  const float range = float(hnpc.senses_range)+extRange;
   if(qDistTo(tx,ty,tz)>range*range)
     return SensesBit::SENSE_NONE;
 
